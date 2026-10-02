@@ -1,0 +1,22 @@
+name: 验证窗口快捷键
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-window-tiling-and-maximization:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 安装 Lua
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4
+      - name: 检查语法并验证窗口快捷键
+        run: |
+          luac5.4 -p window_tiling_and_maximization_shortcuts.lua
+          lua5.4 tests/verify_window_tiling_and_maximization_shortcuts.lua
