@@ -55,10 +55,17 @@ local function verifyShortcutDecision(windowFrame, arrowKey, expectedAction, isF
     maximize = function(_, duration)
       assert(duration == 0)
       observedWindowAction = "maximize"
+      windowFrame = availableScreenFrame
     end,
     moveToUnit = function(_, unitRectangle, duration)
       assert(duration == 0)
       observedWindowAction = { unitRectangle.x, unitRectangle.y, unitRectangle.w, unitRectangle.h }
+      windowFrame = {
+        x = availableScreenFrame.x + unitRectangle.x * availableScreenFrame.w,
+        y = availableScreenFrame.y + unitRectangle.y * availableScreenFrame.h,
+        w = unitRectangle.w * availableScreenFrame.w,
+        h = unitRectangle.h * availableScreenFrame.h,
+      }
     end,
     moveToScreen = function(_, destinationScreen, noResize, ensureInScreenBounds, duration)
       assert(noResize == false and ensureInScreenBounds == true and duration == 0)
@@ -78,6 +85,7 @@ local function verifyShortcutDecision(windowFrame, arrowKey, expectedAction, isF
   else
     assert(observedWindowAction == expectedAction, "窗口状态判断不符合预期")
   end
+  return windowFrame
 end
 
 local ordinaryWindowFrame = { x = -2400, y = -600, w = 800, h = 600 }
@@ -88,13 +96,18 @@ verifyShortcutDecision(ordinaryWindowFrame, "up", { 0, 0, 1, 0.5 })
 verifyShortcutDecision(ordinaryWindowFrame, "down", { 0, 0.5, 1, 0.5 })
 verifyShortcutDecision(topHalfWindowFrame, "up", "maximize")
 verifyShortcutDecision({ x = -2561, y = -893, w = 2561, h = 1441 }, "up", "maximize")
-verifyShortcutDecision({ x = -2560, y = -894, w = 2560, h = 2880 }, "up", "maximize")
+verifyShortcutDecision({ x = -2560, y = -894, w = 2560, h = 2880 }, "up", { 0, 0, 1, 0.5 })
+verifyShortcutDecision({ x = -2561, y = -893, w = 2561, h = 2879 }, "up", { 0, 0, 1, 0.5 })
 verifyShortcutDecision({ x = -2560, y = -894, w = 2560, h = 2000 }, "up", { 0, 0, 1, 0.5 })
 verifyShortcutDecision({ x = -2560, y = 546, w = 2560, h = 1440 }, "up", { 0, 0, 1, 0.5 })
 verifyShortcutDecision(topHalfWindowFrame, "down", { 0, 0.5, 1, 0.5 })
 verifyShortcutDecision(nil, "up", nil)
 verifyShortcutDecision(ordinaryWindowFrame, "up", nil, true)
 verifyShortcutDecision(ordinaryWindowFrame, "up", nil, false, false)
+local windowFrameAfterSequentialUpPresses = ordinaryWindowFrame
+for _, expectedAction in ipairs({ { 0, 0, 1, 0.5 }, "maximize", { 0, 0, 1, 0.5 }, "maximize" }) do
+  windowFrameAfterSequentialUpPresses = verifyShortcutDecision(windowFrameAfterSequentialUpPresses, "up", expectedAction)
+end
 availableScreenFrame = { x = 0, y = 30, w = 2560, h = 1410 }
 verifyShortcutDecision({ x = 0, y = 30, w = 2560, h = 705 }, "up", "maximize")
 verifyShortcutDecision(ordinaryWindowFrame, "left", "previousDisplay", false, true, true)
@@ -106,4 +119,4 @@ previousScreenForVerification = currentScreenForVerification
 nextScreenForVerification = currentScreenForVerification
 verifyShortcutDecision(ordinaryWindowFrame, "left", nil, false, true, true)
 verifyShortcutDecision(ordinaryWindowFrame, "right", nil, false, true, true)
-print("通过 21 项检查：四方向贴靠、上半屏到最大化、跨显示器移动、单显示器与跳过条件。")
+print("通过 26 项检查：四方向贴靠、上半屏与最大化循环、跨显示器移动、单显示器与跳过条件。")

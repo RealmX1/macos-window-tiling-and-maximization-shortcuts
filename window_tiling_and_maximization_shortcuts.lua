@@ -16,15 +16,14 @@ local function tileOrMaximizeFocusedStandardWindowForArrowShortcut(shortcutArrow
   if shortcutArrowKey == "up" then
     local focusedWindowFrame = focusedStandardWindowForTiling:frame()
     local availableScreenFrame = focusedStandardWindowForTiling:screen():frame()
-    -- 容许两点的像素取整误差，以实际窗口区域判断上半屏／最大化状态。
+    -- 容许两点的像素取整误差；只有上半屏再次按上箭头才最大化。
     local windowFrameComparisonTolerancePoints = 2
-    local focusedWindowMatchesTopHalfOrMaximizedFrame =
+    local focusedWindowMatchesTopHalfFrame =
         math.abs(focusedWindowFrame.x - availableScreenFrame.x) <= windowFrameComparisonTolerancePoints
         and math.abs(focusedWindowFrame.y - availableScreenFrame.y) <= windowFrameComparisonTolerancePoints
         and math.abs(focusedWindowFrame.w - availableScreenFrame.w) <= windowFrameComparisonTolerancePoints
-        and (math.abs(focusedWindowFrame.h - availableScreenFrame.h / 2) <= windowFrameComparisonTolerancePoints
-          or math.abs(focusedWindowFrame.h - availableScreenFrame.h) <= windowFrameComparisonTolerancePoints)
-    if focusedWindowMatchesTopHalfOrMaximizedFrame then
+        and math.abs(focusedWindowFrame.h - availableScreenFrame.h / 2) <= windowFrameComparisonTolerancePoints
+    if focusedWindowMatchesTopHalfFrame then
       focusedStandardWindowForTiling:maximize(0)
       return
     end
