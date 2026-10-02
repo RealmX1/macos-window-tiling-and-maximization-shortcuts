@@ -1,4 +1,4 @@
--- 当前显示器内的窗口贴靠与最大化快捷键，依赖 Hammerspoon。
+-- 窗口贴靠、最大化与跨显示器移动快捷键，依赖 Hammerspoon。
 local windowTilingUnitRectanglesByArrowKey = {
   left = { x = 0, y = 0, w = 0.5, h = 1 },
   right = { x = 0.5, y = 0, w = 0.5, h = 1 },
@@ -33,9 +33,9 @@ local function tileOrMaximizeFocusedStandardWindowForArrowShortcut(shortcutArrow
   focusedStandardWindowForTiling:moveToUnit(windowTilingUnitRectanglesByArrowKey[shortcutArrowKey], 0)
 end
 
-local windowTilingAndMaximizationHotkeyBindingsByArrowKey = {}
+local windowTilingMaximizationAndDisplayMovementHotkeyBindingsByAction = {}
 for shortcutArrowKey in pairs(windowTilingUnitRectanglesByArrowKey) do
-  windowTilingAndMaximizationHotkeyBindingsByArrowKey[shortcutArrowKey] = assert(
+  windowTilingMaximizationAndDisplayMovementHotkeyBindingsByAction[shortcutArrowKey] = assert(
     hs.hotkey.bind({ "ctrl", "alt" }, shortcutArrowKey, function()
       tileOrMaximizeFocusedStandardWindowForArrowShortcut(shortcutArrowKey)
     end),
@@ -43,4 +43,32 @@ for shortcutArrowKey in pairs(windowTilingUnitRectanglesByArrowKey) do
   )
 end
 
-return windowTilingAndMaximizationHotkeyBindingsByArrowKey
+local function moveFocusedStandardWindowToRelativeDisplay(relativeDisplayTraversalDirection)
+  local focusedWindowForDisplayMovement = hs.window.focusedWindow()
+  if not focusedWindowForDisplayMovement or not focusedWindowForDisplayMovement:isStandard()
+      or focusedWindowForDisplayMovement:isFullScreen() then
+    return
+  end
+  local currentScreenForDisplayMovement = focusedWindowForDisplayMovement:screen()
+  local destinationScreenForDisplayMovement
+  if relativeDisplayTraversalDirection == "previous" then
+    destinationScreenForDisplayMovement = currentScreenForDisplayMovement:previous()
+  else
+    destinationScreenForDisplayMovement = currentScreenForDisplayMovement:next()
+  end
+  if destinationScreenForDisplayMovement and destinationScreenForDisplayMovement ~= currentScreenForDisplayMovement then
+    -- 按目标显示器的可用区域缩放，保留窗口的相对位置和尺寸比例。
+    focusedWindowForDisplayMovement:moveToScreen(destinationScreenForDisplayMovement, false, true, 0)
+  end
+end
+
+windowTilingMaximizationAndDisplayMovementHotkeyBindingsByAction.previousDisplay = assert(
+  hs.hotkey.bind({ "cmd", "alt", "shift" }, "left", function() moveFocusedStandardWindowToRelativeDisplay("previous") end),
+  "无法绑定 Command + Option + Shift + 左箭头"
+)
+windowTilingMaximizationAndDisplayMovementHotkeyBindingsByAction.nextDisplay = assert(
+  hs.hotkey.bind({ "cmd", "alt", "shift" }, "right", function() moveFocusedStandardWindowToRelativeDisplay("next") end),
+  "无法绑定 Command + Option + Shift + 右箭头"
+)
+
+return windowTilingMaximizationAndDisplayMovementHotkeyBindingsByAction

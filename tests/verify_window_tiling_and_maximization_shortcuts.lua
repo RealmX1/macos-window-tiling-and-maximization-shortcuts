@@ -3,6 +3,7 @@ local verificationScriptPath = debug.getinfo(1, "S").source:sub(2)
 local verificationScriptDirectory = verificationScriptPath:match("^(.*)[/\\]") or "."
 local shortcutModulePath = verificationScriptDirectory .. "/../window_tiling_and_maximization_shortcuts.lua"
 local shortcutCallbacksByArrowKey = {}
+local displayMovementShortcutCallbacksByArrowKey = {}
 local focusedWindowForVerification
 local observedWindowAction
 local isolatedShortcutEnvironment = {
@@ -13,9 +14,17 @@ local isolatedShortcutEnvironment = {
     window = { focusedWindow = function() return focusedWindowForVerification end },
     hotkey = {
       bind = function(modifiers, arrowKey, callback)
-        assert(modifiers[1] == "ctrl" and modifiers[2] == "alt" and #modifiers == 2)
-        assert(not shortcutCallbacksByArrowKey[arrowKey], "出现重复绑定")
-        shortcutCallbacksByArrowKey[arrowKey] = callback
+        local callbacksForModifierCombination
+        if #modifiers == 2 then
+          assert(modifiers[1] == "ctrl" and modifiers[2] == "alt")
+          callbacksForModifierCombination = shortcutCallbacksByArrowKey
+        else
+          assert(#modifiers == 3 and modifiers[1] == "cmd" and modifiers[2] == "alt" and modifiers[3] == "shift")
+          assert(arrowKey == "left" or arrowKey == "right")
+          callbacksForModifierCombination = displayMovementShortcutCallbacksByArrowKey
+        end
+        assert(not callbacksForModifierCombination[arrowKey], "出现重复绑定")
+        callbacksForModifierCombination[arrowKey] = callback
         return { arrowKey = arrowKey }
       end,
     },
@@ -25,15 +34,24 @@ local shortcutHotkeyBindings = assert(loadfile(shortcutModulePath, "t", isolated
 for _, arrowKey in ipairs({ "left", "right", "up", "down" }) do
   assert(shortcutHotkeyBindings[arrowKey] and shortcutCallbacksByArrowKey[arrowKey])
 end
+assert(shortcutHotkeyBindings.previousDisplay and displayMovementShortcutCallbacksByArrowKey.left)
+assert(shortcutHotkeyBindings.nextDisplay and displayMovementShortcutCallbacksByArrowKey.right)
 
 local availableScreenFrame = { x = -2560, y = -894, w = 2560, h = 2880 }
-local function verifyShortcutDecision(windowFrame, arrowKey, expectedAction, isFullScreen, isStandard)
+local previousScreenForVerification = { verificationActionName = "previousDisplay" }
+local nextScreenForVerification = { verificationActionName = "nextDisplay" }
+local currentScreenForVerification = {
+  frame = function() return availableScreenFrame end,
+  previous = function() return previousScreenForVerification end,
+  next = function() return nextScreenForVerification end,
+}
+local function verifyShortcutDecision(windowFrame, arrowKey, expectedAction, isFullScreen, isStandard, useDisplayMovementShortcut)
   observedWindowAction = nil
   focusedWindowForVerification = windowFrame and {
     isStandard = function() return isStandard ~= false end,
     isFullScreen = function() return isFullScreen == true end,
     frame = function() return windowFrame end,
-    screen = function() return { frame = function() return availableScreenFrame end } end,
+    screen = function() return currentScreenForVerification end,
     maximize = function(_, duration)
       assert(duration == 0)
       observedWindowAction = "maximize"
@@ -42,8 +60,16 @@ local function verifyShortcutDecision(windowFrame, arrowKey, expectedAction, isF
       assert(duration == 0)
       observedWindowAction = { unitRectangle.x, unitRectangle.y, unitRectangle.w, unitRectangle.h }
     end,
+    moveToScreen = function(_, destinationScreen, noResize, ensureInScreenBounds, duration)
+      assert(noResize == false and ensureInScreenBounds == true and duration == 0)
+      observedWindowAction = destinationScreen.verificationActionName
+    end,
   } or nil
-  shortcutCallbacksByArrowKey[arrowKey]()
+  if useDisplayMovementShortcut then
+    displayMovementShortcutCallbacksByArrowKey[arrowKey]()
+  else
+    shortcutCallbacksByArrowKey[arrowKey]()
+  end
   if type(expectedAction) == "table" then
     assert(type(observedWindowAction) == "table", "预期调整窗口区域")
     for index, expectedCoordinate in ipairs(expectedAction) do
@@ -71,4 +97,13 @@ verifyShortcutDecision(ordinaryWindowFrame, "up", nil, true)
 verifyShortcutDecision(ordinaryWindowFrame, "up", nil, false, false)
 availableScreenFrame = { x = 0, y = 30, w = 2560, h = 1410 }
 verifyShortcutDecision({ x = 0, y = 30, w = 2560, h = 705 }, "up", "maximize")
-print("通过 14 项检查：四方向贴靠、上半屏到最大化、取整误差、多显示器坐标与跳过条件。")
+verifyShortcutDecision(ordinaryWindowFrame, "left", "previousDisplay", false, true, true)
+verifyShortcutDecision(ordinaryWindowFrame, "right", "nextDisplay", false, true, true)
+verifyShortcutDecision(nil, "left", nil, false, true, true)
+verifyShortcutDecision(ordinaryWindowFrame, "right", nil, true, true, true)
+verifyShortcutDecision(ordinaryWindowFrame, "left", nil, false, false, true)
+previousScreenForVerification = currentScreenForVerification
+nextScreenForVerification = currentScreenForVerification
+verifyShortcutDecision(ordinaryWindowFrame, "left", nil, false, true, true)
+verifyShortcutDecision(ordinaryWindowFrame, "right", nil, false, true, true)
+print("通过 21 项检查：四方向贴靠、上半屏到最大化、跨显示器移动、单显示器与跳过条件。")
